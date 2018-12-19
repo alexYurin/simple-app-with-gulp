@@ -70,7 +70,7 @@ function sass() {
 
 function js() {
   return src(paths.js.vendors.concat(paths.js.src))
-    .pipe($babel())
+    .pipe($babel({ presets: ['env'] }))
     .pipe($concat('scripts.min.js'))
     .pipe($minify())
     .pipe(dest(paths.js.dest))
