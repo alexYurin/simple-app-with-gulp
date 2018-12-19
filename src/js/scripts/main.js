@@ -2,4 +2,4 @@ const hello = name => {
   console.log(`Hello ${name}!`)
 };
 
-hello('World');
+hello('World-mtf');
