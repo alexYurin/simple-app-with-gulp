@@ -34,9 +34,6 @@ var paths = {
     src: 'src/pug/index.pug',
   },
   js: {
-    babel: [
-      'node_modules/@babel/polyfill/dist/polyfill.js',
-    ],
     vendors: [
       'src/vendors/jquery/dist/jquery.min.js',
     ],
