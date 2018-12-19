@@ -39,7 +39,7 @@ var paths = {
     ],
     src: 'src/js/scripts/**/*.js',
     dest: 'src/js',
-    prod: 'src/js/scripts.min.js'
+    bundle: 'src/js/bundle.js'
   },  
   fonts: 'src/fonts/**/*',
   img: 'src/img/**/*'
@@ -49,15 +49,16 @@ function html() {
   return src(paths.pug.src)
     .pipe($pug({ pretty: true }))
     .pipe(dest(paths.base))
-    .pipe($server.reload({stream:true}));
+    .pipe($server.stream());
 };
 
 function css() {
   return src([paths.css.libs, paths.css.src])
-    .pipe($concat('main.min.css'))
+    .pipe($concat('main.css'))
     .pipe($cssnano())
+    .pipe($rename({ suffix: '.min' }))
     .pipe(dest(paths.css.dest))
-    .pipe($server.reload({stream:true}));
+    .pipe($server.stream());
 };
 
 function sass() {
@@ -65,17 +66,22 @@ function sass() {
     .pipe($sass())
     .pipe($autoprefixer(['last 15 versions', '> 1%', 'ie 8', 'ie 7'], { cascade: true }))
     .pipe(dest(paths.sass.dest))
-    .pipe($server.reload({stream:true}));
+    .pipe($server.stream());
 };
 
 function js() {
   return src(paths.js.vendors.concat(paths.js.src))
     .pipe($babel({ presets: ['env'] }))
-    .pipe($concat('scripts.min.js'))
+    .pipe($concat('bundle.js'))
+    .pipe(dest(paths.js.dest))
+    .pipe($server.stream());
+};
+
+function jsOptimize() {
+  return src(paths.js.bundle)
     .pipe($minify())
     .pipe(dest(paths.js.dest))
-    .pipe($server.reload({stream:true}));
-};
+}
 
 function serve(done) {
   $server.init({
@@ -101,17 +107,12 @@ function clear() {
   return $cache.clearAll();
 };
 
-function compile(done) {
-  parallel(html, sass, css, js);
-  done();
-};
-
 function buildImg() {
   return src(paths.img)
     .pipe($imagemin([
       $imagemin.gifsicle({ interlaced: true }),
       $imagemin.jpegtran({ progressive: true }),
-      $imagemin.optipng({ optimizationLevel: 5 }),
+      $imagemin.optipng({ optimizationLevel: true }),
       $imagemin.svgo({
         plugins: [
           {
@@ -135,7 +136,7 @@ function buildCSS(done) {
 };
 
 function buildJS(done) {
-  src(paths.js.prod).pipe(dest(paths.dist + '/js'));
+  src(paths.js.bundle).pipe(dest(paths.dist + '/js'));
   done();  
 };
 
@@ -144,9 +145,17 @@ function buildFonts(done) {
   done();
 };
 
+const crossingCompile = (...args) => {
+  var [func, ...remaining] = args;
+  func();
+  return !remaining.length ? func : crossingCompile(...remaining)
+};
+
+const compile = done => crossingCompile(html, sass, css, js, done);
+
 exports.clear = series(clear);
 exports.dev   = series(compile, serve, watchFiles);
-exports.prod  = series(clean, compile, 
+exports.prod  = series(clean, compile, jsOptimize, 
                   parallel(buildHTML, buildCSS, buildJS, buildFonts, buildImg));
 
 
