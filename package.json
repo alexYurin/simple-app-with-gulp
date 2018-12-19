@@ -1,7 +1,7 @@
 {
   "name": "simple-app-with-gulp",
   "version": "1.0.0",
-  "description": "This web-application This web application is designed to help call center employees navigate the \"РЕМБЫТТЕХНИКА\" company's logistics.",
+  "description": "This web-application with gulp4",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
