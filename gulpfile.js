@@ -1,8 +1,12 @@
+'use strict';
+
 const { src, dest, watch,
         series, parallel } = require('gulp'),
 
       $babel             = require('gulp-babel'),
-      $minify            = require("gulp-babel-minify"),
+      $minify            = require('gulp-babel-minify'),
+      $sourcemaps        = require('gulp-sourcemaps'),
+      $gulpIf            = require('gulp-if'),
       $sass              = require('gulp-sass'),
       $pug               = require('gulp-pug'),
       $server            = require('browser-sync').create(),
@@ -12,7 +16,11 @@ const { src, dest, watch,
       $imagemin          = require('gulp-imagemin'),
       $autoprefixer      = require('gulp-autoprefixer'),
       $del               = require('del'),
+      $notify            = require('gulp-notify'),
+      $combiner          = require('stream-combiner2').obj,
       $cache             = require('gulp-cache');
+
+const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV == 'development';
 
 var paths = {
   base: 'src',
@@ -46,10 +54,15 @@ var paths = {
 };
 
 function html() {
-  return src(paths.pug.src)
-    .pipe($pug({ pretty: true }))
-    .pipe(dest(paths.base))
-    .pipe($server.stream());
+  return $combiner(
+    src(paths.pug.src),
+    $gulpIf(isDevelopment, $sourcemaps.init()),
+    $pug({ pretty: true }),
+    $gulpIf(isDevelopment, $sourcemaps.write()),
+    dest(paths.base),
+    $gulpIf(!isDevelopment, dest(paths.dist)),
+    $server.stream()
+  ).on('error', $notify.onError());
 };
 
 function css() {
@@ -58,53 +71,33 @@ function css() {
     .pipe($cssnano())
     .pipe($rename({ suffix: '.min' }))
     .pipe(dest(paths.css.dest))
+    .pipe($gulpIf(!isDevelopment, dest(paths.dist + '/css')))
     .pipe($server.stream());
 };
 
 function sass() {
-  return src(paths.sass.src)
-    .pipe($sass())
-    .pipe($autoprefixer(['last 15 versions', '> 1%', 'ie 8', 'ie 7'], { cascade: true }))
-    .pipe(dest(paths.sass.dest))
-    .pipe($server.stream());
+  return $combiner(
+    src(paths.sass.src),
+    $gulpIf(isDevelopment, $sourcemaps.init()),
+    $sass(),
+    $autoprefixer(['last 15 versions', '> 1%', 'ie 8', 'ie 7'], { cascade: true }),
+    $gulpIf(isDevelopment, $sourcemaps.write()),
+    dest(paths.sass.dest),
+    $server.stream()
+  ).on('error', $notify.onError());
 };
 
 function js() {
-  return src(paths.js.vendors.concat(paths.js.src))
-    .pipe($babel({ presets: ['env'] }))
-    .pipe($concat('bundle.js'))
-    .pipe(dest(paths.js.dest))
-    .pipe($server.stream());
-};
-
-function jsOptimize() {
-  return src(paths.js.bundle)
-    .pipe($minify())
-    .pipe(dest(paths.js.dest))
-}
-
-function serve(done) {
-  $server.init({
-    server: { baseDir: paths.base },
-    port: 3000,
-    notify: false
-  });
-  done();
-};
-
-function watchFiles(done) {
-  watch(paths.pug.src, html);  
-  watch([paths.sass.src, paths.css.libs], series(sass, css));
-  watch(paths.js.src, js);
-  done();
-};
-
-function clean() {
-  return $del(paths.dist);
-};
-
-function clear() {
-  return $cache.clearAll();
+  return $combiner(
+    src(paths.js.vendors.concat(paths.js.src)),
+    $gulpIf(isDevelopment, $sourcemaps.init()),
+    $babel({ presets: ['env'] }),
+    $concat('bundle.js'),
+    $gulpIf(isDevelopment, $sourcemaps.write(), $minify()),
+    dest(paths.js.dest),
+    $gulpIf(!isDevelopment, dest(paths.dist + '/js')),
+    $server.stream()
+  ).on('error', $notify.onError());
 };
 
 function buildImg() {
@@ -125,38 +118,55 @@ function buildImg() {
     .pipe(dest(paths.dist + '/img'));
 };
 
-function buildHTML(done) {
-  src(paths.html.prod).pipe(dest(paths.dist));
+
+function buildFonts() {
+  return src(paths.fonts).pipe(dest(paths.dist + '/fonts'))
+};
+
+function clean() {
+  return $del(paths.dist);
+};
+
+function clear() {
+  return $cache.clearAll();
+};
+
+function serve(done) {
+  $server.init({
+    server: { baseDir: paths.base },
+    port: 3000,
+    notify: false
+  });
   done();
 };
 
-function buildCSS(done) {
-  src(paths.css.prod).pipe(dest(paths.dist + '/css'));
+function watchFiles(done) {
+  watch(paths.pug.src, series(html));  
+  watch([paths.sass.src, paths.css.libs], series(sass, css));
+  watch(paths.js.src, series(js));
   done();
 };
 
-function buildJS(done) {
-  src(paths.js.bundle).pipe(dest(paths.dist + '/js'));
-  done();  
-};
 
-function buildFonts(done) {
-  src(paths.fonts).pipe(dest(paths.dist + '/fonts'));
-  done();
-};
+const dev = series(
+  /*
+  $ gulp build
+  */
+  parallel(html, sass, css, js),
+  parallel(serve, watchFiles)
+);
 
-const crossingCompile = (...args) => {
-  var [func, ...remaining] = args;
-  func();
-  return !remaining.length ? func : crossingCompile(...remaining)
-};
-
-const compile = done => crossingCompile(html, sass, css, js, done);
+const prod = series(
+  /*
+  $ NODE_ENV=production gulp build
+  */
+  clean,
+  parallel(html, sass, css, js),
+  parallel(buildFonts, buildImg)
+);
 
 exports.clear = series(clear);
-exports.dev   = series(compile, serve, watchFiles);
-exports.prod  = series(clean, compile, jsOptimize, 
-                  parallel(buildHTML, buildCSS, buildJS, buildFonts, buildImg));
+exports.build = isDevelopment ? dev : prod;
 
 
 
