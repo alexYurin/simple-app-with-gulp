@@ -3,7 +3,10 @@
 const { src, dest, watch,
         series, parallel } = require('gulp'),
 
-      $babel             = require('gulp-babel'),
+      $babelify          = require('babelify'),
+      $browserify        = require('browserify'),
+      $buffer            = require('vinyl-buffer'),
+      $tap               = require('gulp-tap'),
       $minify            = require('gulp-babel-minify'),
       $sourcemaps        = require('gulp-sourcemaps'),
       $gulpIf            = require('gulp-if'),
@@ -12,7 +15,6 @@ const { src, dest, watch,
       $server            = require('browser-sync').create(),
       $concat            = require('gulp-concat'),
       $cssnano           = require('gulp-cssnano'),
-      $rename            = require('gulp-rename'),
       $imagemin          = require('gulp-imagemin'),
       $autoprefixer      = require('gulp-autoprefixer'),
       $del               = require('del'),
@@ -25,25 +27,16 @@ const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV == 'developm
 var paths = {
   base: 'src',
   dist: 'dist',
-  html: {
-    prod: 'src/index.html'
-  },
-  css: {
-    src: 'src/css/main.css',
-    libs: 'src/css/libs/libs.css',
-    dest: 'src/css',
-    prod: 'src/css/main.min.css',
+  pug: {
+    src: 'src/pug/index.pug',
   },
   sass: {
     src: 'src/sass/**/*.sass',
     dest: 'src/css'
   },
-  pug: {
-    src: 'src/pug/index.pug',
-  },
   js: {
     vendors: [
-      'src/vendors/jquery/dist/jquery.min.js',
+      'src/vendors/jquery/dist/jquery.js',
     ],
     src: 'src/js/scripts/**/*.js',
     dest: 'src/js',
@@ -53,7 +46,7 @@ var paths = {
   img: 'src/img/**/*'
 };
 
-function html() {
+function pug() {
   return $combiner(
     src(paths.pug.src),
     $gulpIf(isDevelopment, $sourcemaps.init()),
@@ -65,23 +58,15 @@ function html() {
   ).on('error', $notify.onError());
 };
 
-function css() {
-  return src([paths.css.libs, paths.css.src])
-    .pipe($concat('main.css'))
-    .pipe($cssnano())
-    .pipe($rename({ suffix: '.min' }))
-    .pipe(dest(paths.css.dest))
-    .pipe($gulpIf(!isDevelopment, dest(paths.dist + '/css')))
-    .pipe($server.stream());
-};
-
 function sass() {
   return $combiner(
     src(paths.sass.src),
     $gulpIf(isDevelopment, $sourcemaps.init()),
     $sass(),
     $autoprefixer(['last 15 versions', '> 1%', 'ie 8', 'ie 7'], { cascade: true }),
-    $gulpIf(isDevelopment, $sourcemaps.write()),
+    $cssnano(),
+    $concat('main.min.css'),
+    $gulpIf(isDevelopment, $sourcemaps.write(), dest(paths.dist + '/css')),
     dest(paths.sass.dest),
     $server.stream()
   ).on('error', $notify.onError());
@@ -89,14 +74,19 @@ function sass() {
 
 function js() {
   return $combiner(
-    src(paths.js.vendors.concat(paths.js.src)),
+    src(paths.js.vendors.concat(paths.js.src), { read: false }),
     $gulpIf(isDevelopment, $sourcemaps.init()),
-    $babel({ presets: ['env'] }),
-    $concat('bundle.js'),
+    $tap(function(file) {
+      file.contents = $browserify(file.path)
+        .transform($babelify, { presets: ['@babel/env'] })
+        .bundle()
+    }),
+    $buffer(),
     $gulpIf(isDevelopment, $sourcemaps.write(), $minify()),
-    dest(paths.js.dest),
+    $concat('bundle.js'),
     $gulpIf(!isDevelopment, dest(paths.dist + '/js')),
-    $server.stream()
+    dest(paths.js.dest),
+    $server.stream() 
   ).on('error', $notify.onError());
 };
 
@@ -141,8 +131,8 @@ function serve(done) {
 };
 
 function watchFiles(done) {
-  watch(paths.pug.src, series(html));  
-  watch([paths.sass.src, paths.css.libs], series(sass, css));
+  watch(paths.pug.src, series(pug));  
+  watch(paths.sass.src, series(sass));
   watch(paths.js.src, series(js));
   done();
 };
@@ -152,7 +142,7 @@ const dev = series(
   /*
   $ gulp build
   */
-  parallel(html, sass, css, js),
+  parallel(pug, sass, js),
   parallel(serve, watchFiles)
 );
 
@@ -161,8 +151,8 @@ const prod = series(
   $ NODE_ENV=production gulp build
   */
   clean,
-  parallel(html, sass, css, js),
-  parallel(buildFonts, buildImg)
+  parallel(pug, sass, js),
+  parallel(buildImg, buildFonts)
 );
 
 exports.clear = series(clear);
