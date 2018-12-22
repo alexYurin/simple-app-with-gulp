@@ -36,7 +36,7 @@ var paths = {
   },
   js: {
     vendors: [
-      'src/vendors/jquery/dist/jquery.js',
+      isDevelopment ? 'src/vendors/jquery/dist/jquery.js' : 'src/vendors/jquery/dist/jquery.min.js',,
     ],
     src: 'src/js/scripts/**/*.js',
     dest: 'src/js',
