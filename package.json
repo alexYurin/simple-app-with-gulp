@@ -35,6 +35,7 @@
     "gulp-sass": "^4.0.2",
     "gulp-sourcemaps": "^2.6.4",
     "gulp-tap": "^1.0.1",
+    "node-sass": "^4.11.0",
     "stream-combiner2": "^1.1.1",
     "vinyl-buffer": "^1.0.1"
   },
