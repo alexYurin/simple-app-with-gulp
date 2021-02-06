@@ -41,7 +41,7 @@ var paths = {
     src: 'src/js/scripts/**/*.js',
     dest: 'src/js',
     bundle: 'src/js/bundle.js'
-  },  
+  },
   fonts: 'src/fonts/**/*',
   img: 'src/img/**/*'
 };
@@ -86,7 +86,7 @@ function js() {
     $concat('bundle.js'),
     $gulpIf(!isDevelopment, dest(paths.dist + '/js')),
     dest(paths.js.dest),
-    $server.stream() 
+    $server.stream()
   ).on('error', $notify.onError());
 };
 
@@ -131,7 +131,7 @@ function serve(done) {
 };
 
 function watchFiles(done) {
-  watch(paths.pug.src, series(pug));  
+  watch(paths.pug.src, series(pug));
   watch(paths.sass.src, series(sass));
   watch(paths.js.src, series(js));
   done();
@@ -140,7 +140,7 @@ function watchFiles(done) {
 
 const dev = series(
   /*
-  $ gulp build
+  $ gulp dev
   */
   parallel(pug, sass, js),
   parallel(serve, watchFiles)
@@ -148,7 +148,7 @@ const dev = series(
 
 const prod = series(
   /*
-  $ NODE_ENV=production gulp build
+  $ gulp build
   */
   clean,
   parallel(pug, sass, js),
@@ -156,7 +156,5 @@ const prod = series(
 );
 
 exports.clear = series(clear);
-exports.build = isDevelopment ? dev : prod;
-
-
-
+exports.dev = dev;
+exports.build = prod;

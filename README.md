@@ -15,7 +15,5 @@ gulp dev
 
 #### Production mode
 ```
-NODE_ENV=production gulp build
+gulp build
 ```
-
-
